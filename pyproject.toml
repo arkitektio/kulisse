@@ -16,9 +16,11 @@ Specification = "https://github.com/arkitektio/kulisse/blob/main/KULISSE.md"
 
 [project.optional-dependencies]
 # Importing a URDF or Xacro: trimesh builds the primitives and loads mesh files (pycollada for
-# .dae), numpy carries the transforms, xacro expands macros.
-urdf = ["numpy>=1.26", "pycollada>=0.8", "trimesh>=4", "xacro>=2"]
-complete = ["numpy>=1.26", "pycollada>=0.8", "trimesh>=4", "xacro>=2"]
+# .dae), numpy carries the transforms, xacro expands macros. scipy is named because trimesh does
+# not require it and its primitives reach for it: without it the import completes with degraded
+# geometry and a logged ModuleNotFoundError.
+urdf = ["numpy>=1.26", "pycollada>=0.8", "scipy>=1.11", "trimesh>=4", "xacro>=2"]
+complete = ["numpy>=1.26", "pycollada>=0.8", "scipy>=1.11", "trimesh>=4", "xacro>=2"]
 
 [project.scripts]
 kulisse = "kulisse.cli:main"
