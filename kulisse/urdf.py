@@ -20,10 +20,12 @@ import struct
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 from xml.dom.minidom import Document
 
-import numpy as np
+if TYPE_CHECKING:
+    # The urdf extra brings numpy; the rest of kulisse must import without it.
+    import numpy as np
 
 GENERATOR = "kulisse 1"
 """Written into ``asset.generator``. Changes only when the bytes this module writes change."""
@@ -232,6 +234,7 @@ def _resolve(filename: str, base: Path, packages: dict[str, Path]) -> Path:
 
 def _geometry(element: ET.Element, base: Path, packages: dict[str, Path]) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Vertices, normals and faces of one visual's geometry, in the visual's frame."""
+    import numpy as np
     import trimesh
 
     shape = next(iter(element), None)
@@ -273,6 +276,8 @@ def import_urdf(
         UrdfImportError: For a floating or planar joint, a joint and a link sharing a name,
             a robot with no single root link, or geometry that cannot be read.
     """
+    import numpy as np
+
     path = Path(path)
     roots = {name: Path(directory) for name, directory in (packages or {}).items()}
     text = expand(path, arguments)

@@ -154,3 +154,16 @@ def test_a_joint_table_that_does_not_fit_the_model_is_refused(joints: list[dict[
 
 def test_an_unknown_extras_version_is_refused() -> None:
     assert refusal(glb(*triangle(extras={"arkitekt": {"version": 2}}))).code == "bad_extras"
+
+
+def test_checking_a_model_needs_nothing_beyond_the_standard_library(tmp_path) -> None:
+    """kulisse, kulisse.check and the command import without the urdf extra (numpy, trimesh)."""
+    import subprocess
+    import sys
+
+    path = tmp_path / "model.glb"
+    path.write_bytes(glb(*triangle()))
+    script = "import sys; sys.modules['numpy'] = None; sys.modules['trimesh'] = None; import kulisse; import kulisse.cli; print(kulisse.check(sys.argv[1]).stats.triangles)"
+    done = subprocess.run([sys.executable, "-c", script, str(path)], capture_output=True, text=True, check=False)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.strip() == "1"
