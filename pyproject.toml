@@ -10,6 +10,10 @@ license = "MIT"
 # a viewer, a CI job or a server-side tool can hold a GLB to the rules without numpy.
 dependencies = []
 
+[project.urls]
+Repository = "https://github.com/arkitektio/kulisse"
+Specification = "https://github.com/arkitektio/kulisse/blob/main/KULISSE.md"
+
 [project.optional-dependencies]
 # Importing a URDF or Xacro: trimesh builds the primitives and loads mesh files (pycollada for
 # .dae), numpy carries the transforms, xacro expands macros.
