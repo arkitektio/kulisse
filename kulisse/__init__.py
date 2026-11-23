@@ -49,7 +49,9 @@ def snippet(path: str | Path, name: str | None = None) -> str:
     """
     name = name or Path(path).stem
     if not name.isidentifier():
-        raise ValueError(f"an asset's name is an identifier: {name!r} is not one, pass a name")
+        raise ValueError(
+            f"an asset's name is an identifier: {name!r} is not one, pass a name"
+        )
     report = check(path)
     if report.joints:
         return f'<Robot src="@self.assets.{name}" joints="@self.State.joints" />'

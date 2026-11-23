@@ -27,7 +27,15 @@ NODE_NAME_PATTERN = re.compile(r"[a-z0-9_]+")
 JOINT_TYPES = frozenset({"revolute", "continuous", "prismatic"})
 
 _COMPONENT_BYTES = {5120: 1, 5121: 1, 5122: 2, 5123: 2, 5125: 4, 5126: 4}
-_TYPE_COMPONENTS = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4, "MAT2": 4, "MAT3": 9, "MAT4": 16}
+_TYPE_COMPONENTS = {
+    "SCALAR": 1,
+    "VEC2": 2,
+    "VEC3": 3,
+    "VEC4": 4,
+    "MAT2": 4,
+    "MAT3": 9,
+    "MAT4": 16,
+}
 
 DEFAULT_EXTENSIONS = frozenset(
     {
@@ -96,15 +104,23 @@ def model_ref(data: bytes) -> str:
 def check_ref_format(ref: str) -> None:
     """Refuse a reference that is not ``sha256:`` and 64 lowercase hex digits."""
     if not REF_PATTERN.fullmatch(ref):
-        raise ModelRefused("bad_reference", f"a model reference is 'sha256:' and 64 lowercase hex characters, not {ref!r}")
+        raise ModelRefused(
+            "bad_reference",
+            f"a model reference is 'sha256:' and 64 lowercase hex characters, not {ref!r}",
+        )
 
 
-def validate_model(data: bytes, ref: str, policy: ModelPolicy | None = None) -> ModelReport:
+def validate_model(
+    data: bytes, ref: str, policy: ModelPolicy | None = None
+) -> ModelReport:
     """Check ``data`` against ``ref`` and ``policy``; return what it contains or raise ``ModelRefused``."""
     policy = policy or ModelPolicy()
     check_ref_format(ref)
     if len(data) > policy.max_size:
-        raise ModelRefused("too_large", f"the model is {len(data)} bytes, over the limit of {policy.max_size}")
+        raise ModelRefused(
+            "too_large",
+            f"the model is {len(data)} bytes, over the limit of {policy.max_size}",
+        )
     actual = model_ref(data)
     if actual != ref:
         raise ModelRefused("hash_mismatch", f"the stored bytes are {actual}, not {ref}")
@@ -119,33 +135,57 @@ def validate_model(data: bytes, ref: str, policy: ModelPolicy | None = None) -> 
     stats = _stats(document)
     _check_counts(stats, policy)
     _check_textures(document, data, policy, warnings)
-    return ModelReport(ref=ref, size=len(data), nodes=sorted(node_names), stats=stats, warnings=warnings, joints=_joints(document))
+    return ModelReport(
+        ref=ref,
+        size=len(data),
+        nodes=sorted(node_names),
+        stats=stats,
+        warnings=warnings,
+        joints=_joints(document),
+    )
 
 
 def _read_chunks(data: bytes, policy: ModelPolicy) -> tuple[dict[str, Any], int]:
     """The parsed JSON chunk and the length of the binary chunk (0 when there is none)."""
     if len(data) < 20:
-        raise ModelRefused("bad_header", "the file is shorter than a GLB header and one chunk header")
+        raise ModelRefused(
+            "bad_header", "the file is shorter than a GLB header and one chunk header"
+        )
     magic, version, declared = struct.unpack_from("<III", data, 0)
     if magic != GLB_MAGIC:
-        raise ModelRefused("bad_header", "the file does not start with the glTF magic; only binary glTF (.glb) is stored")
+        raise ModelRefused(
+            "bad_header",
+            "the file does not start with the glTF magic; only binary glTF (.glb) is stored",
+        )
     if version != 2:
-        raise ModelRefused("bad_header", f"the container version is {version}, only 2 is supported")
+        raise ModelRefused(
+            "bad_header", f"the container version is {version}, only 2 is supported"
+        )
     if declared != len(data):
-        raise ModelRefused("bad_header", f"the header declares {declared} bytes but the file has {len(data)}")
+        raise ModelRefused(
+            "bad_header",
+            f"the header declares {declared} bytes but the file has {len(data)}",
+        )
 
     json_length, json_type = struct.unpack_from("<II", data, 12)
     if json_type != CHUNK_JSON:
         raise ModelRefused("bad_structure", "the first chunk is not the JSON chunk")
     if json_length > policy.max_json:
-        raise ModelRefused("bad_structure", f"the JSON chunk is {json_length} bytes, over the limit of {policy.max_json}")
+        raise ModelRefused(
+            "bad_structure",
+            f"the JSON chunk is {json_length} bytes, over the limit of {policy.max_json}",
+        )
     json_end = 20 + json_length
     if json_end > len(data):
-        raise ModelRefused("bad_structure", "the JSON chunk runs past the end of the file")
+        raise ModelRefused(
+            "bad_structure", "the JSON chunk runs past the end of the file"
+        )
     try:
         document = json.loads(data[20:json_end].decode("utf-8"))
     except (UnicodeDecodeError, ValueError) as error:
-        raise ModelRefused("bad_structure", f"the JSON chunk does not parse: {error}") from error
+        raise ModelRefused(
+            "bad_structure", f"the JSON chunk does not parse: {error}"
+        ) from error
     if not isinstance(document, dict):
         raise ModelRefused("bad_structure", "the JSON chunk is not an object")
     asset = document.get("asset")
@@ -155,12 +195,19 @@ def _read_chunks(data: bytes, policy: ModelPolicy) -> tuple[dict[str, Any], int]
     binary_length = 0
     if json_end < len(data):
         if json_end + 8 > len(data):
-            raise ModelRefused("bad_structure", "a chunk header is cut off after the JSON chunk")
+            raise ModelRefused(
+                "bad_structure", "a chunk header is cut off after the JSON chunk"
+            )
         binary_length, binary_type = struct.unpack_from("<II", data, json_end)
         if binary_type != CHUNK_BIN:
-            raise ModelRefused("bad_structure", "the chunk after the JSON chunk is not the binary chunk")
+            raise ModelRefused(
+                "bad_structure",
+                "the chunk after the JSON chunk is not the binary chunk",
+            )
         if json_end + 8 + binary_length > len(data):
-            raise ModelRefused("bad_structure", "the binary chunk runs past the end of the file")
+            raise ModelRefused(
+                "bad_structure", "the binary chunk runs past the end of the file"
+            )
     return document, binary_length
 
 
@@ -175,20 +222,32 @@ def _check_self_contained(document: dict[str, Any]) -> None:
     for key in ("buffers", "images"):
         for index, item in enumerate(_items(document, key)):
             if "uri" in item:
-                raise ModelRefused("external_reference", f"{key}[{index}] has a uri; a model carries all its data in its binary chunk")
+                raise ModelRefused(
+                    "external_reference",
+                    f"{key}[{index}] has a uri; a model carries all its data in its binary chunk",
+                )
 
 
-def _check_extensions(document: dict[str, Any], policy: ModelPolicy, warnings: list[str]) -> None:
+def _check_extensions(
+    document: dict[str, Any], policy: ModelPolicy, warnings: list[str]
+) -> None:
     required = document.get("extensionsRequired", [])
     used = document.get("extensionsUsed", [])
     if not isinstance(required, list) or not isinstance(used, list):
-        raise ModelRefused("bad_structure", "extensionsRequired and extensionsUsed must be lists")
+        raise ModelRefused(
+            "bad_structure", "extensionsRequired and extensionsUsed must be lists"
+        )
     refused = sorted(set(required) - policy.extensions)
     if refused:
-        raise ModelRefused("unsupported_extension", f"the model requires extensions that are not allowed: {refused}")
+        raise ModelRefused(
+            "unsupported_extension",
+            f"the model requires extensions that are not allowed: {refused}",
+        )
     ignored = sorted(set(used) - set(required) - policy.extensions)
     if ignored:
-        warnings.append(f"extensions used but not supported are ignored by viewers: {ignored}")
+        warnings.append(
+            f"extensions used but not supported are ignored by viewers: {ignored}"
+        )
 
 
 def _is_fallback_buffer(buffer: dict[str, Any]) -> bool:
@@ -199,8 +258,16 @@ def _is_fallback_buffer(buffer: dict[str, Any]) -> bool:
 
 def _span(item: dict[str, Any], what: str) -> tuple[int, int]:
     offset, length = item.get("byteOffset", 0), item.get("byteLength")
-    if not isinstance(offset, int) or not isinstance(length, int) or offset < 0 or length < 0:
-        raise ModelRefused("bad_structure", f"{what} needs a non-negative integer byteOffset and byteLength")
+    if (
+        not isinstance(offset, int)
+        or not isinstance(length, int)
+        or offset < 0
+        or length < 0
+    ):
+        raise ModelRefused(
+            "bad_structure",
+            f"{what} needs a non-negative integer byteOffset and byteLength",
+        )
     return offset, length
 
 
@@ -211,18 +278,31 @@ def _check_bounds(document: dict[str, Any], binary_length: int) -> None:
         if _is_fallback_buffer(buffer):
             continue
         if index != 0:
-            raise ModelRefused("bad_structure", f"buffers[{index}] has no data: only the first buffer is the binary chunk")
+            raise ModelRefused(
+                "bad_structure",
+                f"buffers[{index}] has no data: only the first buffer is the binary chunk",
+            )
         _, length = _span(buffer, "buffers[0]")
         if length > binary_length:
-            raise ModelRefused("bad_structure", f"buffers[0] declares {length} bytes but the binary chunk has {binary_length}")
+            raise ModelRefused(
+                "bad_structure",
+                f"buffers[0] declares {length} bytes but the binary chunk has {binary_length}",
+            )
 
     def check_view(what: str, source: dict[str, Any]) -> None:
         buffer_index = source.get("buffer")
         if not isinstance(buffer_index, int) or not 0 <= buffer_index < len(buffers):
-            raise ModelRefused("bad_structure", f"{what} names a buffer that does not exist")
+            raise ModelRefused(
+                "bad_structure", f"{what} names a buffer that does not exist"
+            )
         offset, length = _span(source, what)
-        if offset + length > _span(buffers[buffer_index], f"buffers[{buffer_index}]")[1]:
-            raise ModelRefused("bad_structure", f"{what} runs past the end of buffers[{buffer_index}]")
+        if (
+            offset + length
+            > _span(buffers[buffer_index], f"buffers[{buffer_index}]")[1]
+        ):
+            raise ModelRefused(
+                "bad_structure", f"{what} runs past the end of buffers[{buffer_index}]"
+            )
 
     for index, view in enumerate(views):
         check_view(f"bufferViews[{index}]", view)
@@ -233,27 +313,51 @@ def _check_bounds(document: dict[str, Any], binary_length: int) -> None:
     for index, accessor in enumerate(_items(document, "accessors")):
         count = accessor.get("count")
         if not isinstance(count, int) or count < 0:
-            raise ModelRefused("bad_structure", f"accessors[{index}] needs a non-negative integer count")
+            raise ModelRefused(
+                "bad_structure",
+                f"accessors[{index}] needs a non-negative integer count",
+            )
         view_index = accessor.get("bufferView")
         if view_index is None:
             continue
         if not isinstance(view_index, int) or not 0 <= view_index < len(views):
-            raise ModelRefused("bad_structure", f"accessors[{index}] names a bufferView that does not exist")
+            raise ModelRefused(
+                "bad_structure",
+                f"accessors[{index}] names a bufferView that does not exist",
+            )
         component_type = accessor.get("componentType")
         kind = accessor.get("type")
-        component = _COMPONENT_BYTES.get(component_type) if isinstance(component_type, int) else None
+        component = (
+            _COMPONENT_BYTES.get(component_type)
+            if isinstance(component_type, int)
+            else None
+        )
         components = _TYPE_COMPONENTS.get(kind) if isinstance(kind, str) else None
         if component is None or components is None:
-            raise ModelRefused("bad_structure", f"accessors[{index}] has an unknown componentType or type")
+            raise ModelRefused(
+                "bad_structure",
+                f"accessors[{index}] has an unknown componentType or type",
+            )
         element = component * components
         view = views[view_index]
         stride = view.get("byteStride", element)
         offset = accessor.get("byteOffset", 0)
-        if not isinstance(stride, int) or not isinstance(offset, int) or stride < 0 or offset < 0:
-            raise ModelRefused("bad_structure", f"accessors[{index}] has an invalid byteOffset or byteStride")
+        if (
+            not isinstance(stride, int)
+            or not isinstance(offset, int)
+            or stride < 0
+            or offset < 0
+        ):
+            raise ModelRefused(
+                "bad_structure",
+                f"accessors[{index}] has an invalid byteOffset or byteStride",
+            )
         needed = offset + (stride * (count - 1) + element if count else 0)
         if needed > _span(view, f"bufferViews[{view_index}]")[1]:
-            raise ModelRefused("bad_structure", f"accessors[{index}] runs past the end of bufferViews[{view_index}]")
+            raise ModelRefused(
+                "bad_structure",
+                f"accessors[{index}] runs past the end of bufferViews[{view_index}]",
+            )
 
 
 def _node_names(document: dict[str, Any], warnings: list[str]) -> set[str]:
@@ -271,14 +375,20 @@ def _node_names(document: dict[str, Any], warnings: list[str]) -> set[str]:
         if not NODE_NAME_PATTERN.fullmatch(name):
             unconventional.add(name)
     if repeated:
-        warnings.append(f"node names used more than once cannot be bound reliably: {sorted(repeated)}")
+        warnings.append(
+            f"node names used more than once cannot be bound reliably: {sorted(repeated)}"
+        )
     if unconventional:
         warnings.append(f"node names outside [a-z0-9_]+: {sorted(unconventional)}")
     return names
 
 
 def _number(value: object) -> bool:
-    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+    return (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and math.isfinite(value)
+    )
 
 
 def _check_extras(document: dict[str, Any], node_names: set[str]) -> None:
@@ -299,7 +409,9 @@ def _check_extras(document: dict[str, Any], node_names: set[str]) -> None:
     if not isinstance(joints, list):
         raise fail("joints must be a list")
     source = arkitekt.get("source")
-    if source is not None and not (isinstance(source, str) and REF_PATTERN.fullmatch(source)):
+    if source is not None and not (
+        isinstance(source, str) and REF_PATTERN.fullmatch(source)
+    ):
         raise fail("source must be a sha256: reference")
 
     joint_names: set[str] = set()
@@ -308,29 +420,49 @@ def _check_extras(document: dict[str, Any], node_names: set[str]) -> None:
         where = f"joints[{index}]"
         if not isinstance(joint, dict):
             raise fail(f"{where} must be an object")
-        name, node, kind, axis = joint.get("name"), joint.get("node"), joint.get("type"), joint.get("axis")
+        name, node, kind, axis = (
+            joint.get("name"),
+            joint.get("node"),
+            joint.get("type"),
+            joint.get("axis"),
+        )
         if not isinstance(name, str) or not name:
             raise fail(f"{where} needs a name")
         if name in joint_names:
             raise fail(f"joint {name!r} is defined twice")
         joint_names.add(name)
         if node not in node_names:
-            raise fail(f"joint {name!r} drives node {node!r}, which the model does not have")
+            raise fail(
+                f"joint {name!r} drives node {node!r}, which the model does not have"
+            )
         if node in driven:
             raise fail(f"node {node!r} is driven by more than one joint")
         driven.add(node)
         if kind not in JOINT_TYPES:
-            raise fail(f"joint {name!r} has type {kind!r}; supported are {sorted(JOINT_TYPES)}")
-        if not (isinstance(axis, list) and len(axis) == 3 and all(_number(component) for component in axis)):
+            raise fail(
+                f"joint {name!r} has type {kind!r}; supported are {sorted(JOINT_TYPES)}"
+            )
+        if not (
+            isinstance(axis, list)
+            and len(axis) == 3
+            and all(_number(component) for component in axis)
+        ):
             raise fail(f"joint {name!r} needs an axis of three numbers")
-        if abs(math.sqrt(sum(component * component for component in axis)) - 1.0) > 1e-3:
+        if (
+            abs(math.sqrt(sum(component * component for component in axis)) - 1.0)
+            > 1e-3
+        ):
             raise fail(f"the axis of joint {name!r} is not a unit vector")
         limit = joint.get("limit")
         if kind == "continuous":
             if limit is not None:
                 raise fail(f"continuous joint {name!r} has no limit")
         else:
-            if not (isinstance(limit, dict) and _number(limit.get("lower")) and _number(limit.get("upper"))):
+            if not (
+                isinstance(limit, dict)
+                and _number(limit.get("lower"))
+                and _number(limit.get("upper"))
+            ):
                 raise fail(f"joint {name!r} needs a limit with lower and upper")
             if limit["lower"] > limit["upper"]:
                 raise fail(f"the limit of joint {name!r} has lower above upper")
@@ -339,10 +471,18 @@ def _check_extras(document: dict[str, Any], node_names: set[str]) -> None:
         mimic = joint.get("mimic")
         if mimic is None:
             continue
-        if not (isinstance(mimic, dict) and _number(mimic.get("multiplier", 1.0)) and _number(mimic.get("offset", 0.0))):
-            raise fail(f"the mimic of joint {joint['name']!r} needs a numeric multiplier and offset")
+        if not (
+            isinstance(mimic, dict)
+            and _number(mimic.get("multiplier", 1.0))
+            and _number(mimic.get("offset", 0.0))
+        ):
+            raise fail(
+                f"the mimic of joint {joint['name']!r} needs a numeric multiplier and offset"
+            )
         if mimic.get("joint") not in joint_names or mimic.get("joint") == joint["name"]:
-            raise fail(f"joint {joint['name']!r} mimics {mimic.get('joint')!r}, which is not another joint of this model")
+            raise fail(
+                f"joint {joint['name']!r} mimics {mimic.get('joint')!r}, which is not another joint of this model"
+            )
 
 
 def _stats(document: dict[str, Any]) -> ModelStats:
@@ -350,7 +490,10 @@ def _stats(document: dict[str, Any]) -> ModelStats:
 
     def count_of(index: object) -> int:
         if not isinstance(index, int) or not 0 <= index < len(accessors):
-            raise ModelRefused("bad_structure", "a mesh primitive names an accessor that does not exist")
+            raise ModelRefused(
+                "bad_structure",
+                "a mesh primitive names an accessor that does not exist",
+            )
         return int(accessors[index].get("count", 0))
 
     triangles = 0
@@ -360,7 +503,9 @@ def _stats(document: dict[str, Any]) -> ModelStats:
             raise ModelRefused("bad_structure", "mesh primitives must be a list")
         for primitive in primitives:
             if not isinstance(primitive, dict):
-                raise ModelRefused("bad_structure", "a mesh primitive must be an object")
+                raise ModelRefused(
+                    "bad_structure", "a mesh primitive must be an object"
+                )
             mode = primitive.get("mode", 4)
             if mode not in (4, 5, 6):
                 continue
@@ -388,7 +533,10 @@ def _check_counts(stats: ModelStats, policy: ModelPolicy) -> None:
         ("animation clips", stats.animations, policy.max_animations),
     ):
         if value > limit:
-            raise ModelRefused("over_budget", f"the model has {value} {what}, over the limit of {limit}")
+            raise ModelRefused(
+                "over_budget",
+                f"the model has {value} {what}, over the limit of {limit}",
+            )
 
 
 def _joints(document: dict[str, Any]) -> list[dict[str, Any]]:
@@ -416,7 +564,9 @@ def image_size(data: bytes) -> tuple[int, int] | None:
     if len(data) >= 30 and data[:4] == b"RIFF" and data[8:12] == b"WEBP":
         kind = data[12:16]
         if kind == b"VP8X":
-            return 1 + int.from_bytes(data[24:27], "little"), 1 + int.from_bytes(data[27:30], "little")
+            return 1 + int.from_bytes(data[24:27], "little"), 1 + int.from_bytes(
+                data[27:30], "little"
+            )
         if kind == b"VP8 ":
             width, height = struct.unpack("<HH", data[26:30])
             return width & 0x3FFF, height & 0x3FFF
@@ -426,7 +576,9 @@ def image_size(data: bytes) -> tuple[int, int] | None:
     return None
 
 
-def _check_textures(document: dict[str, Any], data: bytes, policy: ModelPolicy, warnings: list[str]) -> None:
+def _check_textures(
+    document: dict[str, Any], data: bytes, policy: ModelPolicy, warnings: list[str]
+) -> None:
     """Texture sizes, read from the image headers in the binary chunk."""
     json_length = struct.unpack_from("<I", data, 12)[0]
     binary_offset = 20 + json_length + 8
@@ -435,15 +587,28 @@ def _check_textures(document: dict[str, Any], data: bytes, policy: ModelPolicy, 
     for index, image in enumerate(_items(document, "images")):
         view_index = image.get("bufferView")
         if not isinstance(view_index, int) or not 0 <= view_index < len(views):
-            raise ModelRefused("bad_structure", f"images[{index}] names a bufferView that does not exist")
+            raise ModelRefused(
+                "bad_structure",
+                f"images[{index}] names a bufferView that does not exist",
+            )
         offset, length = _span(views[view_index], f"bufferViews[{view_index}]")
-        size = image_size(data[binary_offset + offset : binary_offset + offset + length])
+        size = image_size(
+            data[binary_offset + offset : binary_offset + offset + length]
+        )
         if size is None:
-            warnings.append(f"images[{index}] is not a PNG, JPEG or WebP whose size can be read")
+            warnings.append(
+                f"images[{index}] is not a PNG, JPEG or WebP whose size can be read"
+            )
             continue
         width, height = size
         if max(width, height) > policy.max_texture_size:
-            raise ModelRefused("over_budget", f"images[{index}] is {width} x {height}, over the limit of {policy.max_texture_size} px per side")
+            raise ModelRefused(
+                "over_budget",
+                f"images[{index}] is {width} x {height}, over the limit of {policy.max_texture_size} px per side",
+            )
         memory += width * height * 4
     if memory > policy.max_texture_memory:
-        raise ModelRefused("over_budget", f"textures decode to {memory} bytes, over the limit of {policy.max_texture_memory}")
+        raise ModelRefused(
+            "over_budget",
+            f"textures decode to {memory} bytes, over the limit of {policy.max_texture_memory}",
+        )

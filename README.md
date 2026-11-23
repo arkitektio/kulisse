@@ -21,7 +21,7 @@ kulisse snippet robot.glb --name robot
 ```python
 import kulisse
 
-report = kulisse.check("robot.glb")      # ModelReport, or ModelRefused(code, message)
-kulisse.reference("robot.glb")           # "sha256:…", what a blok names as for_model
-kulisse.snippet("robot.glb")             # '<Robot src="@self.assets.robot" … />'
+report = kulisse.check("robot.glb")  # ModelReport, or ModelRefused(code, message)
+kulisse.reference("robot.glb")  # "sha256:…", what a blok names as for_model
+kulisse.snippet("robot.glb")  # '<Robot src="@self.assets.robot" … />'
 ```

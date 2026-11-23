@@ -37,7 +37,9 @@ class UrdfImportError(ValueError):
     """A URDF this importer cannot turn into a model, with the reason."""
 
 
-def _floats(text: str | None, count: int, default: tuple[float, ...]) -> tuple[float, ...]:
+def _floats(
+    text: str | None, count: int, default: tuple[float, ...]
+) -> tuple[float, ...]:
     if text is None:
         return default
     values = tuple(float(part) for part in text.split())
@@ -46,7 +48,9 @@ def _floats(text: str | None, count: int, default: tuple[float, ...]) -> tuple[f
     return values
 
 
-def _quaternion(roll: float, pitch: float, yaw: float) -> tuple[float, float, float, float]:
+def _quaternion(
+    roll: float, pitch: float, yaw: float
+) -> tuple[float, float, float, float]:
     """URDF's fixed-axis roll, pitch, yaw as a glTF quaternion (x, y, z, w)."""
     cr, sr = math.cos(roll / 2), math.sin(roll / 2)
     cp, sp = math.cos(pitch / 2), math.sin(pitch / 2)
@@ -59,7 +63,9 @@ def _quaternion(roll: float, pitch: float, yaw: float) -> tuple[float, float, fl
     )
 
 
-def _multiply(a: tuple[float, ...], b: tuple[float, ...]) -> tuple[float, float, float, float]:
+def _multiply(
+    a: tuple[float, ...], b: tuple[float, ...]
+) -> tuple[float, float, float, float]:
     ax, ay, az, aw = a
     bx, by, bz, bw = b
     return (
@@ -87,7 +93,10 @@ class Origin:
         """The origin an element states, or the identity when it states none."""
         if element is None:
             return cls()
-        return cls(_floats(element.get("xyz"), 3, (0.0, 0.0, 0.0)), _floats(element.get("rpy"), 3, (0.0, 0.0, 0.0)))
+        return cls(
+            _floats(element.get("xyz"), 3, (0.0, 0.0, 0.0)),
+            _floats(element.get("rpy"), 3, (0.0, 0.0, 0.0)),
+        )
 
     def node(self) -> dict[str, Any]:
         """The transform as glTF node properties, left out where it is the identity."""
@@ -116,14 +125,25 @@ class Builder:
     def view(self, data: bytes, target: int | None = None) -> int:
         """Append ``data`` to the binary chunk as a buffer view; its index."""
         self.binary.extend(b"\0" * (-len(self.binary) % 4))
-        view: dict[str, Any] = {"buffer": 0, "byteOffset": len(self.binary), "byteLength": len(data)}
+        view: dict[str, Any] = {
+            "buffer": 0,
+            "byteOffset": len(self.binary),
+            "byteLength": len(data),
+        }
         if target is not None:
             view["target"] = target
         self.binary.extend(data)
         self.views.append(view)
         return len(self.views) - 1
 
-    def accessor(self, array: np.ndarray, kind: str, component: int, target: int, bounds: bool = False) -> int:
+    def accessor(
+        self,
+        array: np.ndarray,
+        kind: str,
+        component: int,
+        target: int,
+        bounds: bool = False,
+    ) -> int:
         """An accessor over ``array``, with min/max when ``bounds``; its index."""
         accessor: dict[str, Any] = {
             "bufferView": self.view(array.tobytes(), target),
@@ -137,21 +157,33 @@ class Builder:
         self.accessors.append(accessor)
         return len(self.accessors) - 1
 
-    def mesh(self, vertices: np.ndarray, normals: np.ndarray, faces: np.ndarray, material: int | None) -> int:
+    def mesh(
+        self,
+        vertices: np.ndarray,
+        normals: np.ndarray,
+        faces: np.ndarray,
+        material: int | None,
+    ) -> int:
         """One triangle-list primitive; the mesh index."""
         primitive: dict[str, Any] = {
             "attributes": {
-                "POSITION": self.accessor(vertices.astype("<f4"), "VEC3", 5126, 34962, bounds=True),
+                "POSITION": self.accessor(
+                    vertices.astype("<f4"), "VEC3", 5126, 34962, bounds=True
+                ),
                 "NORMAL": self.accessor(normals.astype("<f4"), "VEC3", 5126, 34962),
             },
-            "indices": self.accessor(faces.astype("<u4").reshape(-1), "SCALAR", 5125, 34963),
+            "indices": self.accessor(
+                faces.astype("<u4").reshape(-1), "SCALAR", 5125, 34963
+            ),
         }
         if material is not None:
             primitive["material"] = material
         self.meshes.append({"primitives": [primitive]})
         return len(self.meshes) - 1
 
-    def material(self, key: str, rgba: tuple[float, ...] | None, texture: Path | None) -> int:
+    def material(
+        self, key: str, rgba: tuple[float, ...] | None, texture: Path | None
+    ) -> int:
         """The material for ``key``, made once; its index."""
         known = self.material_index.get(key)
         if known is not None:
@@ -161,9 +193,16 @@ class Builder:
             pbr["baseColorFactor"] = _clean(rgba)
         if texture is not None:
             data = texture.read_bytes()
-            mime = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}.get(texture.suffix.lower())
+            mime = {
+                ".png": "image/png",
+                ".jpg": "image/jpeg",
+                ".jpeg": "image/jpeg",
+                ".webp": "image/webp",
+            }.get(texture.suffix.lower())
             if mime is None:
-                raise UrdfImportError(f"texture {texture.name} is not a PNG, JPEG or WebP")
+                raise UrdfImportError(
+                    f"texture {texture.name} is not a PNG, JPEG or WebP"
+                )
             self.images.append({"bufferView": self.view(data), "mimeType": mime})
             self.textures.append({"source": len(self.images) - 1})
             pbr["baseColorTexture"] = {"index": len(self.textures) - 1}
@@ -201,7 +240,9 @@ class Builder:
         if binary:
             document["buffers"] = [{"byteLength": len(binary)}]
         document["extras"] = extras
-        payload = json.dumps(document, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+        payload = json.dumps(
+            document, separators=(",", ":"), ensure_ascii=False
+        ).encode("utf-8")
         payload += b" " * (-len(payload) % 4)
         chunks = struct.pack("<II", len(payload), 0x4E4F534A) + payload
         if binary:
@@ -216,9 +257,13 @@ def expand(path: Path, arguments: dict[str, str] | None = None) -> str:
     try:
         import xacro
     except ImportError as error:  # pragma: no cover - the extra installs it
-        raise UrdfImportError("expanding Xacro needs the xacro package: pip install 'kulisse[urdf]'") from error
+        raise UrdfImportError(
+            "expanding Xacro needs the xacro package: pip install 'kulisse[urdf]'"
+        ) from error
     # xacro's own annotation names a file object; what it returns is a minidom Document.
-    document = cast(Document, xacro.process_file(str(path), mappings=dict(arguments or {})))
+    document = cast(
+        Document, xacro.process_file(str(path), mappings=dict(arguments or {}))
+    )
     return document.toxml()
 
 
@@ -227,12 +272,16 @@ def _resolve(filename: str, base: Path, packages: dict[str, Path]) -> Path:
     if match:
         package, rest = match.groups()
         if package not in packages:
-            raise UrdfImportError(f"{filename} names the package {package!r}; say where it is with --package {package}=<directory>")
+            raise UrdfImportError(
+                f"{filename} names the package {package!r}; say where it is with --package {package}=<directory>"
+            )
         return packages[package] / rest
     return (base / filename.removeprefix("file://")).resolve()
 
 
-def _geometry(element: ET.Element, base: Path, packages: dict[str, Path]) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def _geometry(
+    element: ET.Element, base: Path, packages: dict[str, Path]
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Vertices, normals and faces of one visual's geometry, in the visual's frame."""
     import numpy as np
     import trimesh
@@ -241,11 +290,19 @@ def _geometry(element: ET.Element, base: Path, packages: dict[str, Path]) -> tup
     if shape is None:
         raise UrdfImportError("a visual has an empty geometry")
     if shape.tag == "box":
-        mesh = trimesh.creation.box(extents=_floats(shape.get("size"), 3, (1.0, 1.0, 1.0)))
+        mesh = trimesh.creation.box(
+            extents=_floats(shape.get("size"), 3, (1.0, 1.0, 1.0))
+        )
     elif shape.tag == "cylinder":
-        mesh = trimesh.creation.cylinder(radius=float(shape.get("radius", 1)), height=float(shape.get("length", 1)), sections=32)
+        mesh = trimesh.creation.cylinder(
+            radius=float(shape.get("radius", 1)),
+            height=float(shape.get("length", 1)),
+            sections=32,
+        )
     elif shape.tag == "sphere":
-        mesh = trimesh.creation.icosphere(subdivisions=3, radius=float(shape.get("radius", 1)))
+        mesh = trimesh.creation.icosphere(
+            subdivisions=3, radius=float(shape.get("radius", 1))
+        )
     elif shape.tag == "mesh":
         source = _resolve(shape.get("filename", ""), base, packages)
         if not source.is_file():
@@ -256,7 +313,11 @@ def _geometry(element: ET.Element, base: Path, packages: dict[str, Path]) -> tup
             mesh.apply_scale(_floats(scale, 3, (1.0, 1.0, 1.0)))
     else:
         raise UrdfImportError(f"geometry <{shape.tag}> is not supported")
-    return np.asarray(mesh.vertices), np.asarray(mesh.vertex_normals), np.asarray(mesh.faces)
+    return (
+        np.asarray(mesh.vertices),
+        np.asarray(mesh.vertex_normals),
+        np.asarray(mesh.faces),
+    )
 
 
 def import_urdf(
@@ -285,27 +346,37 @@ def import_urdf(
 
     links = {link.get("name", ""): link for link in robot.findall("link")}
     joints = robot.findall("joint")
-    named_materials = {material.get("name", ""): material for material in robot.findall("material")}
+    named_materials = {
+        material.get("name", ""): material for material in robot.findall("material")
+    }
     for joint in joints:
         name, kind = joint.get("name", ""), joint.get("type", "")
         if kind in ("floating", "planar"):
-            raise UrdfImportError(f"joint {name!r} is {kind}; only fixed, revolute, continuous and prismatic joints are supported")
+            raise UrdfImportError(
+                f"joint {name!r} is {kind}; only fixed, revolute, continuous and prismatic joints are supported"
+            )
         if kind != "fixed" and kind not in MOVING:
             raise UrdfImportError(f"joint {name!r} has the unknown type {kind!r}")
         if kind in MOVING and name in links:
-            raise UrdfImportError(f"the joint and the link {name!r} share a name; a node name must be unique, so rename one of them")
+            raise UrdfImportError(
+                f"the joint and the link {name!r} share a name; a node name must be unique, so rename one of them"
+            )
     children_of: dict[str, list[ET.Element]] = {}
     child_links: set[str] = set()
     for joint in joints:
         parent = joint.find("parent")
         child = joint.find("child")
         if parent is None or child is None:
-            raise UrdfImportError(f"joint {joint.get('name')!r} needs a parent and a child")
+            raise UrdfImportError(
+                f"joint {joint.get('name')!r} needs a parent and a child"
+            )
         children_of.setdefault(parent.get("link", ""), []).append(joint)
         child_links.add(child.get("link", ""))
     root_links = [name for name in links if name not in child_links]
     if len(root_links) != 1:
-        raise UrdfImportError(f"a robot has one root link; this one has {len(root_links)}: {root_links}")
+        raise UrdfImportError(
+            f"a robot has one root link; this one has {len(root_links)}: {root_links}"
+        )
 
     builder = Builder()
     table: list[dict[str, Any]] = []
@@ -315,26 +386,53 @@ def import_urdf(
         if material is None:
             return None
         name = material.get("name", "")
-        source = material if (material.find("color") is not None or material.find("texture") is not None) else named_materials.get(name)
+        source = (
+            material
+            if (
+                material.find("color") is not None
+                or material.find("texture") is not None
+            )
+            else named_materials.get(name)
+        )
         if source is None:
             return None
         color = source.find("color")
         texture = source.find("texture")
-        rgba = _floats(color.get("rgba"), 4, (1.0, 1.0, 1.0, 1.0)) if color is not None else None
-        image = _resolve(texture.get("filename", ""), path.parent, roots) if texture is not None else None
+        rgba = (
+            _floats(color.get("rgba"), 4, (1.0, 1.0, 1.0, 1.0))
+            if color is not None
+            else None
+        )
+        image = (
+            _resolve(texture.get("filename", ""), path.parent, roots)
+            if texture is not None
+            else None
+        )
         return builder.material(name or json.dumps([rgba, str(image)]), rgba, image)
 
     def build_link(name: str, transform: dict[str, Any]) -> int:
         link = links.get(name)
         if link is None:
-            raise UrdfImportError(f"a joint refers to the link {name!r}, which does not exist")
+            raise UrdfImportError(
+                f"a joint refers to the link {name!r}, which does not exist"
+            )
         children: list[int] = []
         for index, visual in enumerate(link.findall("visual")):
             geometry = visual.find("geometry")
             if geometry is None:
                 continue
-            mesh = builder.mesh(*_geometry(geometry, path.parent, roots), material_of(visual))
-            children.append(builder.node({"name": f"{name}_visual_{index}", "mesh": mesh, **Origin.parse(visual.find("origin")).node()}))
+            mesh = builder.mesh(
+                *_geometry(geometry, path.parent, roots), material_of(visual)
+            )
+            children.append(
+                builder.node(
+                    {
+                        "name": f"{name}_visual_{index}",
+                        "mesh": mesh,
+                        **Origin.parse(visual.find("origin")).node(),
+                    }
+                )
+            )
         for joint in children_of.get(name, []):
             joint_name, kind = joint.get("name", ""), joint.get("type", "")
             origin = Origin.parse(joint.find("origin")).node()
@@ -343,13 +441,32 @@ def import_urdf(
             if kind == "fixed":
                 children.append(build_link(child.get("link", ""), origin))
                 continue
-            children.append(builder.node({"name": joint_name, **origin, "children": [build_link(child.get("link", ""), {})]}))
+            children.append(
+                builder.node(
+                    {
+                        "name": joint_name,
+                        **origin,
+                        "children": [build_link(child.get("link", ""), {})],
+                    }
+                )
+            )
             axis_element = joint.find("axis")
-            axis = np.array(_floats(axis_element.get("xyz") if axis_element is not None else None, 3, (1.0, 0.0, 0.0)))
+            axis = np.array(
+                _floats(
+                    axis_element.get("xyz") if axis_element is not None else None,
+                    3,
+                    (1.0, 0.0, 0.0),
+                )
+            )
             length = float(np.linalg.norm(axis))
             if length == 0:
                 raise UrdfImportError(f"joint {joint_name!r} has a zero axis")
-            entry: dict[str, Any] = {"name": joint_name, "node": joint_name, "type": kind, "axis": _clean(tuple(axis / length))}
+            entry: dict[str, Any] = {
+                "name": joint_name,
+                "node": joint_name,
+                "type": kind,
+                "axis": _clean(tuple(axis / length)),
+            }
             if kind != "continuous":
                 limit = joint.find("limit")
                 entry["limit"] = {
@@ -358,7 +475,11 @@ def import_urdf(
                 }
             mimic = joint.find("mimic")
             if mimic is not None:
-                entry["mimic"] = {"joint": mimic.get("joint", ""), "multiplier": float(mimic.get("multiplier", 1)), "offset": float(mimic.get("offset", 0))}
+                entry["mimic"] = {
+                    "joint": mimic.get("joint", ""),
+                    "multiplier": float(mimic.get("multiplier", 1)),
+                    "offset": float(mimic.get("offset", 0)),
+                }
             table.append(entry)
         node: dict[str, Any] = {"name": name, **transform}
         if children:
@@ -374,7 +495,13 @@ def import_urdf(
     # The table is in document order, not in the order the tree was walked.
     order = {joint.get("name", ""): index for index, joint in enumerate(joints)}
     table.sort(key=lambda entry: order[entry["name"]])
-    extras = {"arkitekt": {"version": 1, "joints": table, "source": "sha256:" + hashlib.sha256(text.encode("utf-8")).hexdigest()}}
+    extras = {
+        "arkitekt": {
+            "version": 1,
+            "joints": table,
+            "source": "sha256:" + hashlib.sha256(text.encode("utf-8")).hexdigest(),
+        }
+    }
     return builder.glb(root, extras)
 
 
@@ -387,7 +514,9 @@ def with_joints(data: bytes, joints: list[dict[str, Any]]) -> bytes:
     document = json.loads(data[20 : 20 + json_length])
     extras = document.setdefault("extras", {})
     extras["arkitekt"] = {"version": 1, "joints": joints}
-    payload = json.dumps(document, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    payload = json.dumps(document, separators=(",", ":"), ensure_ascii=False).encode(
+        "utf-8"
+    )
     payload += b" " * (-len(payload) % 4)
     rest = data[20 + json_length :]
     body = struct.pack("<II", len(payload), 0x4E4F534A) + payload + rest
