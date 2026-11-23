@@ -3,6 +3,7 @@
 import json
 import struct
 from dataclasses import replace
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -252,7 +253,9 @@ def test_an_unknown_extras_version_is_refused() -> None:
     )
 
 
-def test_checking_a_model_needs_nothing_beyond_the_standard_library(tmp_path) -> None:
+def test_checking_a_model_needs_nothing_beyond_the_standard_library(
+    tmp_path: Path,
+) -> None:
     """kulisse, kulisse.check and the command import without the urdf extra (numpy, trimesh)."""
     import subprocess
     import sys
